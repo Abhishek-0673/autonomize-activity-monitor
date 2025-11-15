@@ -92,4 +92,42 @@ class GitHubClient:
 
         return last_page_num  # total commits = last_page_num (since per_page=1)
 
+    def get_recent_repos(self, username: str):
+        """
+        Fetch recently-active repositories for a user.
+        Sorted by last push date (most recent first).
+        """
 
+        url = (
+            f"https://api.github.com/users/{username}/repos"
+            f"?sort=pushed&direction=desc&per_page=100"
+        )
+
+        logger.info(f"Fetching recent repos for GitHub user = {username}")
+
+        try:
+            response = requests.get(url, headers=self.headers)
+            data = response.json()
+
+            if response.status_code != 200:
+                err = data.get("message", "GitHub repos fetch failed")
+                logger.error(f"GitHub Repo Error: {err}")
+                return {"success": False, "error": err}
+
+            repos = []
+            for repo in data:
+                repos.append({
+                    "name": repo.get("name"),
+                    "full_name": repo.get("full_name"),
+                    "url": repo.get("html_url"),
+                    "description": repo.get("description"),
+                    "last_pushed": repo.get("pushed_at"),
+                    "stars": repo.get("stargazers_count"),
+                    "forks": repo.get("forks_count"),
+                })
+
+            return {"success": True, "data": repos}
+
+        except Exception as e:
+            logger.error(f"GitHub repo fetch error: {e}")
+            return {"success": False, "error": str(e)}

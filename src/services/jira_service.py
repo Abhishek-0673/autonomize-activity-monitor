@@ -8,19 +8,41 @@ class JiraService:
     def __init__(self):
         self.client = JiraClient()
 
-    def get_user_issues(self, account_id: str):
+    def get_user_issues(self, account_id: str, limit: int = 10, offset: int = 0):
+        """
+        Fetch full issue list from JIRA (working version),
+        then apply clean limit+offset pagination.
+        """
         data = self.client.get_user_activity(account_id)
-
-        # resolve name
         member_name = UserResolver.resolve_reverse(account_id) or "This user"
 
+        # Handle JIRA errors
         if "error" in data:
-            return {"message": f"Failed to fetch issues for {member_name}.", "error": data["error"]}
+            return {
+                "message": f"Failed to fetch issues for {member_name}.",
+                "error": data["error"]
+            }
 
-        if data["count"] == 0:
+        issues = data.get("issues", [])
+        total = len(issues)
+
+        if total == 0:
             return {"message": f"No active issues found for {member_name}."}
 
+        # -------------------------
+        # LOCAL OFFSET + LIMIT
+        # -------------------------
+        start = offset
+        end = offset + limit
+        paginated = issues[start:end]
+
         return {
-            "message": f"{member_name} has {data['count']} active issue(s).",
-            "issues": data["issues"],
+            "message": f"{member_name} has {total} active issue(s).",
+            "issues": paginated,
+            "meta": {
+                "total": total,
+                "limit": limit,
+                "offset": offset,
+                "returned": len(paginated)
+            }
         }
