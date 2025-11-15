@@ -13,26 +13,28 @@ class GitHubClient:
             "Accept": "application/vnd.github+json"
         }
 
-    def _get(self, url: str, params: dict = None):
+    def _get(self, url: str, params=None, headers=None):
         try:
-            response = requests.get(url, headers=self.headers, params=params)
+            response = requests.get(url, headers=headers or self.headers, params=params)
             data = response.json()
-
-            # Any error?
             if response.status_code >= 400:
-                msg = data.get("message", "Unknown GitHub API error")
-                logger.error(f"GitHub error: {msg}")
-                return {"success": False, "error": msg}
-
+                return {"success": False, "error": data.get("message", "Unknown GitHub error")}
             return {"success": True, "data": data}
-
         except Exception as e:
-            logger.error(f"GitHub network error: {e}")
             return {"success": False, "error": str(e)}
 
     def get_recent_commits(self, username: str):
-        url = f"{self.BASE_URL}/users/{username}/events"
-        return self._get(url)
+        url = f"{self.BASE_URL}/search/commits"
+        params = {
+            "q": f"author:{username}",
+            "sort": "author-date",
+            "order": "desc"
+        }
+        headers = {
+            **self.headers,
+            "Accept": "application/vnd.github.cloak-preview"  # required!
+        }
+        return self._get(url, params=params, headers=headers)
 
     def get_pull_requests(self, username: str):
         url = f"{self.BASE_URL}/search/issues"
