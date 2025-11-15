@@ -2,7 +2,7 @@ from fastapi import APIRouter, Query
 from src.api.models.query_models import QueryRequestModel
 from src.services.activity_service import ActivityService
 
-router = APIRouter()
+router = APIRouter(tags=["Activity"])
 service = ActivityService()
 
 @router.post("/activity")
