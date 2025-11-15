@@ -19,10 +19,8 @@ class JiraClient(BaseClient):
     def get_user_activity(self, account_id: str) -> dict:
         """Fetch issues assigned to the given JIRA accountId."""
 
-        jql = (
-            f"project = SCRUM AND assignee = {account_id} "
-            "AND statusCategory != Done ORDER BY updated DESC"
-        )
+        jql = f'project = SCRUM AND assignee = "{account_id}" AND statusCategory != Done ORDER BY updated DESC'
+        logger.info(f"Final JQL used: {jql}")
 
         url = f"{self.base_url}/search/jql"
         payload = {
@@ -71,5 +69,49 @@ class JiraClient(BaseClient):
         except requests.exceptions.RequestException as e:
             logger.error(f"Network error contacting JIRA: {e}")
             return {"error": "Network error contacting JIRA service."}
+
+    def get_issue_details(self, issue_key: str):
+        url = f"{self.base_url}/issue/{issue_key}?expand=changelog"
+
+        try:
+            r = requests.get(url, auth=self.auth, headers=self.headers)
+            data = r.json()
+
+            if r.status_code >= 400:
+                return {"error": data.get("errorMessages", ["Unknown error"])[0]}
+
+            issue = {
+                "key": data.get("key"),
+                "summary": data["fields"].get("summary"),
+                "description": data["fields"].get("description"),
+                "status": data["fields"].get("status", {}).get("name"),
+                "priority": data["fields"].get("priority", {}).get("name"),
+                "assignee": data["fields"].get("assignee", {}).get("displayName"),
+                "updated": data["fields"].get("updated"),
+                "created": data["fields"].get("created"),
+                "comments": [
+                    {
+                        "author": c["author"]["displayName"],
+                        "body": c["body"],
+                        "created": c["created"]
+                    }
+                    for c in data["fields"].get("comment", {}).get("comments", [])
+                ],
+                "changelog": [
+                    {
+                        "field": h["items"][0].get("field"),
+                        "from": h["items"][0].get("fromString"),
+                        "to": h["items"][0].get("toString"),
+                        "created": h.get("created")
+                    }
+                    for h in data.get("changelog", {}).get("histories", [])
+                ]
+            }
+
+            return issue
+
+        except Exception as e:
+            return {"error": str(e)}
+
 
 

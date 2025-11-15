@@ -7,3 +7,4 @@ requests==2.32.5
 pytest
 pytest-cov
 httpx
+python-dateutil

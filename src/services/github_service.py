@@ -1,4 +1,7 @@
+from datetime import datetime, timedelta, timezone
 import os
+from dateutil import parser as date_parser
+
 from src.integrations.github_client import GitHubClient
 from src.core.logger import get_logger
 
@@ -8,31 +11,127 @@ logger = get_logger(__name__)
 class GitHubService:
     def __init__(self):
         self.client = GitHubClient()
-        # Your repo name stays intact for commits & PR checks
         self.repo_name = os.environ.get("GITHUB_REPO_NAME", "autonomize-activity-monitor")
 
-    def get_user_github_activity(self, username: str, limit: int = 5, offset: int = 0):
-        """
-        Fetch GitHub activity (commits, PRs, repos)
-        using LIMIT + OFFSET with clean metadata format.
-        """
+    # ------------------------------------------------------
+    # DATE FILTER HELPERS
+    # ------------------------------------------------------
+    from datetime import timezone
+    from dateutil import parser as date_parser
 
-        # --------------------------
-        # 1. Fetch commits (raw)
-        # --------------------------
-        commits_raw = self.client.get_recent_commits(
-            username=username,
-            repo_name=self.repo_name
-        )
+    def apply_date_filter(self, commits, since=None, until=None):
+        """Filter commits by date range (timezone-safe)."""
 
-        if not commits_raw["success"]:
-            return {"error": commits_raw["error"]}
+        filtered = []
 
-        all_commits = commits_raw["data"]
-        total_commits = len(all_commits)
+        for item in commits:
+            ts = item.get("commit", {}).get("author", {}).get("date")
+            if not ts:
+                continue
 
-        # local pagination
-        paginated_commits = all_commits[offset: offset + limit]
+            commit_date = date_parser.parse(ts)
+
+            # Make commit_date timezone aware
+            if commit_date.tzinfo is None:
+                commit_date = commit_date.replace(tzinfo=timezone.utc)
+
+            # Normalize since/until
+            if since and since.tzinfo is None:
+                since = since.replace(tzinfo=timezone.utc)
+            if until and until.tzinfo is None:
+                until = until.replace(tzinfo=timezone.utc)
+
+            # Apply filter
+            if since and commit_date < since:
+                continue
+            if until and commit_date > until:
+                continue
+
+            filtered.append(item)
+
+        return filtered
+
+    def resolve_relative_dates(self, period: str):
+        """Convert keywords like 'this_week' into datetime ranges."""
+        today = datetime.utcnow().date()
+
+        if period == "today":
+            return today, today
+
+        if period == "yesterday":
+            y = today - timedelta(days=1)
+            return y, y
+
+        if period == "this_week":
+            start = today - timedelta(days=today.weekday())
+            return start, today
+
+        if period == "last_week":
+            start = today - timedelta(days=today.weekday() + 7)
+            end = start + timedelta(days=6)
+            return start, end
+
+        if period == "this_month":
+            start = today.replace(day=1)
+            return start, today
+
+        if period == "last_month":
+            first = today.replace(day=1)
+            last_month_end = first - timedelta(days=1)
+            last_month_start = last_month_end.replace(day=1)
+            return last_month_start, last_month_end
+
+        return None, None
+
+    # ------------------------------------------------------
+    # COMMITS WITH DATE FILTERS
+    # ------------------------------------------------------
+    def get_user_commits(self, username: str, limit: int = 10, offset: int = 0,
+                         period: str = None, date_from: str = None, date_to: str = None):
+
+        raw = self.client.get_recent_commits(username, self.repo_name)
+
+        if not raw["success"]:
+            return {"error": raw["error"]}
+
+        all_commits = raw["data"]
+
+        # --------------------------------------------
+        # 1️⃣ Resolve date filters
+        # --------------------------------------------
+        since, until = None, None
+
+        # relative filters
+        if period:
+            since, until = self.resolve_relative_dates(period)
+            if since:
+                since = datetime.combine(since, datetime.min.time(), tzinfo=timezone.utc)
+            if until:
+                until = datetime.combine(until, datetime.max.time(), tzinfo=timezone.utc)
+
+        # absolute filters
+        if date_from:
+            since = datetime.combine(
+                date_parser.parse(date_from).date(),
+                datetime.min.time()
+            )
+        if date_to:
+            until = datetime.combine(
+                date_parser.parse(date_to).date(),
+                datetime.max.time()
+            )
+
+        # --------------------------------------------
+        # 2️⃣ Apply date filtering
+        # --------------------------------------------
+        filtered_commits = self.apply_date_filter(all_commits, since, until)
+
+        total = len(filtered_commits)
+
+        # --------------------------------------------
+        # 3️⃣ Local pagination
+        # --------------------------------------------
+        paginated = filtered_commits[offset: offset + limit]
 
         commits = [
             {
@@ -42,75 +141,18 @@ class GitHubService:
                 "url": item.get("html_url"),
                 "sha": item.get("sha"),
             }
-            for item in paginated_commits
+            for item in paginated
         ]
 
-        commit_meta = {
-            "total": total_commits,
-            "limit": limit,
-            "offset": offset,
-            "returned": len(commits)
-        }
-
-        # --------------------------
-        # 2. Pull Requests
-        # --------------------------
-        prs_raw = self.client.get_pull_requests(username, self.repo_name)
-
-        if not prs_raw["success"]:
-            return {"error": prs_raw["error"]}
-
-        all_prs = prs_raw["data"].get("items", [])
-        total_prs = len(all_prs)
-
-        paginated_prs = all_prs[offset: offset + limit]
-
-        prs = [
-            {
-                "title": pr.get("title"),
-                "url": pr.get("html_url"),
-                "repo": self.repo_name
-            }
-            for pr in paginated_prs
-        ]
-
-        pr_meta = {
-            "total": total_prs,
-            "limit": limit,
-            "offset": offset,
-            "returned": len(prs)
-        }
-
-        # --------------------------
-        # 3. Recent repositories
-        # --------------------------
-        repos_raw = self.client.get_recent_repos(username)
-
-        if not repos_raw["success"]:
-            return {"error": repos_raw["error"]}
-
-        all_repos = repos_raw["data"]
-        total_repos = len(all_repos)
-
-        paginated_repos = all_repos[offset: offset + limit]
-
-        repo_meta = {
-            "total": total_repos,
-            "limit": limit,
-            "offset": offset,
-            "returned": len(paginated_repos)
-        }
-
-        # --------------------------
-        # 4. Final structured output
-        # --------------------------
         return {
             "commits": commits,
-            "commit_meta": commit_meta,
-
-            "prs": prs,
-            "pr_meta": pr_meta,
-
-            "recent_repos": paginated_repos,
-            "repo_meta": repo_meta
+            "meta": {
+                "total": total,
+                "limit": limit,
+                "offset": offset,
+                "returned": len(commits),
+                "filtered_since": since.isoformat() if since else None,
+                "filtered_until": until.isoformat() if until else None,
+                "period": period,
+            },
         }

@@ -1,17 +1,22 @@
 class ActivitySummaryService:
+
     @staticmethod
     def generate(user: str, jira_data: dict, github_data: dict) -> str:
         """
         Human-friendly summary about user's activity.
         """
 
-        # Extract JIRA info
+        # --------------------
+        # JIRA activity
+        # --------------------
         jira_count = jira_data.get("meta", {}).get("total", 0)
 
-        # Extract GitHub info
-        commit_count = github_data.get("commit_meta", {}).get("total", 0)
-        pr_count = github_data.get("pr_meta", {}).get("total", 0)
-        repo_count = github_data.get("repo_meta", {}).get("total", 0)
+        # --------------------
+        # GitHub activity
+        # --------------------
+        commit_count = github_data.get("commits", {}).get("meta", {}).get("total", 0)
+        pr_count = github_data.get("prs", {}).get("meta", {}).get("total", 0)
+        repo_count = github_data.get("recent_repos", {}).get("meta", {}).get("total", 0)
 
         parts = []
 
@@ -39,7 +44,7 @@ class ActivitySummaryService:
         else:
             parts.append("has not been active in GitHub repos recently")
 
-        # Build final sentence
+        # Final merged summary
         summary = (
             f"Summary: In the recent period, {user} "
             + ", ".join(parts[:-1])

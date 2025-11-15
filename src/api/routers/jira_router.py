@@ -1,15 +1,24 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter
 from src.services.jira_service import JiraService
+from src.core.user_resolver import UserResolver
 
-router = APIRouter(prefix="/jira", tags=["JIRA"])
+router = APIRouter(prefix="/api/v1/jira", tags=["JIRA"])
 jira_service = JiraService()
 
-@router.get("/{username}")
-def get_user_issues(username: str):
-    """Fetch JIRA issues for a given user."""
-    data = jira_service.get_user_issues(username)
 
-    if "error" in data:
-        raise HTTPException(status_code=500, detail=data["error"])
+@router.get("/users/{username}/issues")
+def get_user_issues(username: str, limit: int = 10, offset: int = 0):
 
-    return data
+    resolved = UserResolver.resolve(username)
+    if not resolved:
+        return {"error": f"No accountId configured for '{username}'"}
+
+    account_id = resolved["jira"]
+
+    return jira_service.get_user_issues(account_id, limit=limit, offset=offset)
+
+
+@router.get("/issues/{issue_key}")
+def get_issue_details(issue_key: str):
+    """Get full details of a specific JIRA issue."""
+    return jira_service.get_issue_details(issue_key)
