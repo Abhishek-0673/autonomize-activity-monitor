@@ -24,15 +24,16 @@ class GitHubClient:
             return {"success": False, "error": str(e)}
 
     def get_recent_commits(self, username: str):
+        repo_name = "autonomize-activity-monitor"
         url = f"{self.BASE_URL}/search/commits"
         params = {
-            "q": f"author:{username}",
+            "q": f"author:{username} repo:{username}/{repo_name}",
             "sort": "author-date",
             "order": "desc"
         }
         headers = {
             **self.headers,
-            "Accept": "application/vnd.github.cloak-preview"  # required!
+            "Accept": "application/vnd.github.cloak-preview"
         }
         return self._get(url, params=params, headers=headers)
 
