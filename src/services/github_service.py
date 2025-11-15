@@ -9,47 +9,47 @@ class GitHubService:
         self.client = GitHubClient()
         self.repo_name = "autonomize-activity-monitor"
 
-    def get_user_github_activity(self, username: str):
-        # ---- Fetch commits ----
-        commits_raw = self.client.get_recent_commits(username, self.repo_name)
+    def get_user_github_activity(self, username: str, limit: int = 5, page: int = 1):
+        # ---- Total commits ----
+        total_commits = self.client.get_total_commits(username, self.repo_name)
+        total_pages = (total_commits + limit - 1) // limit  # ceil
+
+        # ---- Commits for this page ----
+        commits_raw = self.client.get_recent_commits(
+            username=username,
+            repo_name=self.repo_name,
+            limit=limit,
+            page=page
+        )
 
         if not commits_raw["success"]:
-            return {"error": f"GitHub commits error: {commits_raw['error']}"}
+            return {"error": commits_raw["error"]}
 
-        # Repo commits format:
-        # [
-        #   {
-        #       "commit": {...},
-        #       "html_url": "...",
-        #       ...
-        #   }
-        # ]
+        commit_items = commits_raw["data"]
 
         commits = [
             {
                 "repo": f"{username}/{self.repo_name}",
                 "message": item.get("commit", {}).get("message"),
                 "timestamp": item.get("commit", {}).get("author", {}).get("date"),
-                "url": item.get("html_url")
+                "url": item.get("html_url"),
+                "sha": item.get("sha")
             }
-            for item in commits_raw["data"]
+            for item in commit_items
         ]
 
-        # ---- Fetch PRs ----
+        # ---- PRs ----
         prs_raw = self.client.get_pull_requests(username, self.repo_name)
-
         if not prs_raw["success"]:
-            return {"error": f"GitHub PR error: {prs_raw['error']}"}
-
-        pr_items = prs_raw["data"].get("items", [])
+            return {"error": prs_raw["error"]}
 
         prs = [
             {
                 "title": pr.get("title"),
                 "url": pr.get("html_url"),
-                "repo": pr.get("repository_url", "").split("/")[-1]
+                "repo": self.repo_name
             }
-            for pr in pr_items
+            for pr in prs_raw["data"].get("items", [])
         ]
 
         # ---- Final Response ----
@@ -58,4 +58,12 @@ class GitHubService:
             "commits": commits,
             "pr_count": len(prs),
             "prs": prs,
+            "pagination": {
+                "page": page,
+                "limit": limit,
+                "returned": len(commit_items),
+                "total_commits": total_commits,
+                "total_pages": total_pages,
+            }
         }
+
