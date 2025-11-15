@@ -24,6 +24,7 @@ class IntentService:
 
     @staticmethod
     def detect_intent(text: str) -> str:
+        """Detect intent based on keyword patterns and AI."""
         text_lower = text.lower()
 
         # Step 1 — Classic keyword matching

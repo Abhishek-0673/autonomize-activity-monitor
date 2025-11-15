@@ -6,6 +6,7 @@ ENV_PATH = os.path.join(BASE_DIR, ".env")
 
 
 class Settings(BaseSettings):
+    """Application settings."""
     jira_base_url: str = ""
     jira_email: str = ""
     jira_api_token: str = ""

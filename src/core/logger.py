@@ -1,6 +1,7 @@
 import logging
 
 def get_logger(name: str) -> logging.Logger:
+    """Logger factory."""
     logger = logging.getLogger(name)
     if not logger.handlers:
         handler = logging.StreamHandler()

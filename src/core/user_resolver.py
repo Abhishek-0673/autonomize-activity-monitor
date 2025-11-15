@@ -20,11 +20,13 @@ class UserResolver:
 
     @staticmethod
     def resolve(name: str):
+        """Resolve a natural language name into a JIRA account ID."""
         key = name.lower()
         return UserResolver.MAP.get(key)
 
     @staticmethod
     def resolve_reverse(jira_id: str):
+        """Resolve a JIRA account ID into a natural language name."""
         for name, ids in UserResolver.MAP.items():
             if ids["jira"] == jira_id:
                 return name

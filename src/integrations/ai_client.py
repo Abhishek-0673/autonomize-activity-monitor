@@ -6,6 +6,7 @@ logger = get_logger(__name__)
 
 
 class AIClient:
+    """Handles communication with the AI API."""
     def __init__(self):
         openai.api_key = settings.openai_api_key
 

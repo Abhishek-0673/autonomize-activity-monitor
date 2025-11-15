@@ -71,6 +71,7 @@ class JiraClient(BaseClient):
             return {"error": "Network error contacting JIRA service."}
 
     def get_issue_details(self, issue_key: str):
+        """Fetch details of a specific JIRA issue."""
         url = f"{self.base_url}/issue/{issue_key}?expand=changelog"
 
         try:

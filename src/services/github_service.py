@@ -1,21 +1,21 @@
 import os
 from datetime import datetime, timedelta, timezone
-from dateutil.relativedelta import relativedelta
 from src.integrations.github_client import GitHubClient
+from src.api.utils.response_builder import success, failure
 from src.core.logger import get_logger
 
 logger = get_logger(__name__)
 
 
 class GitHubService:
+    """GitHub service for fetching user activity."""
     def __init__(self):
         self.client = GitHubClient()
         self.repo_name = os.environ.get("GITHUB_REPO_NAME", "autonomize-activity-monitor")
 
-    # ------------------------------------------------------
-    # PERIOD → DATE RANGE MAPPER
-    # ------------------------------------------------------
+    # Converts period strings like "today" / "this_week" → (since, until)
     def resolve_period(self, period: str):
+        """Resolve period strings to since/until datetimes."""
         if not period:
             return None, None
 
@@ -49,19 +49,17 @@ class GitHubService:
             first_this_month = datetime(now.year, now.month, 1, tzinfo=timezone.utc)
             last_month_end = first_this_month - timedelta(days=1)
             since = datetime(last_month_end.year, last_month_end.month, 1, tzinfo=timezone.utc)
-            until = datetime(last_month_end.year, last_month_end.month, last_month_end.day, 23, 59, 59,
-                             tzinfo=timezone.utc)
+            until = datetime(last_month_end.year, last_month_end.month, last_month_end.day,
+                             23, 59, 59, tzinfo=timezone.utc)
 
         else:
             return None, None
 
         return since, until
 
-    # ------------------------------------------------------
-    # CORE DATE FILTER FUNCTION
-    # ------------------------------------------------------
+    # Filters commits based on since/until
     def apply_date_filter(self, commits, since, until):
-        """Filter commits by datetime range."""
+        """Apply date filters to commits."""
         filtered = []
         for c in commits:
             ts = c.get("commit", {}).get("author", {}).get("date")
@@ -73,7 +71,6 @@ class GitHubService:
             except:
                 continue
 
-            # Only compare when filter exists
             if since and commit_dt < since:
                 continue
             if until and commit_dt > until:
@@ -83,30 +80,32 @@ class GitHubService:
 
         return filtered
 
-    # ------------------------------------------------------
-    # 1️⃣ GET COMMITS (limit + offset + period)
-    # ------------------------------------------------------
-    def get_user_commits(self, username: str, limit: int = 10, offset: int = 0,
-                         period: str = None, since: str = None, until: str = None):
-
-        # Convert a period like "this_week" → since/until datetime
+    # Commit endpoint with filters and pagination
+    def get_user_commits(
+        self,
+        username: str,
+        limit: int = 10,
+        offset: int = 0,
+        period: str = None,
+        since: str = None,
+        until: str = None
+    ):
+        """Fetch commits from a repo with pagination."""
         if period:
             since, until = self.resolve_period(period)
 
-        # Convert ISO date strings to datetime
         if isinstance(since, str):
-            since = datetime.fromisoformat(since)
+            since = datetime.fromisoformat(since).replace(tzinfo=timezone.utc)
 
         if isinstance(until, str):
-            until = datetime.fromisoformat(until)
+            until = datetime.fromisoformat(until).replace(tzinfo=timezone.utc)
 
         raw = self.client.get_recent_commits(username, self.repo_name)
         if not raw["success"]:
-            return {"error": raw["error"]}
+            return failure(raw["error"])
 
         all_commits = raw["data"]
 
-        # Apply date filter
         filtered = self.apply_date_filter(all_commits, since, until)
         total = len(filtered)
 
@@ -123,30 +122,31 @@ class GitHubService:
             for c in paginated
         ]
 
-        return {
-            "commits": commits,
-            "meta": {
+        return success(
+            message=f"Commits retrieved for {username}.",
+            items=commits,
+            meta={
                 "total": total,
                 "limit": limit,
                 "offset": offset,
                 "returned": len(commits),
                 "period": period,
                 "since": since.isoformat() if since else None,
-                "until": until.isoformat() if until else None
-            },
-        }
+                "until": until.isoformat() if until else None,
+            }
+        )
 
-    # ------------------------------------------------------
-    # 2️⃣ PULL REQUESTS
-    # ------------------------------------------------------
+    # PR endpoint with pagination
     def get_user_prs(self, username: str, limit: int = 10, offset: int = 0):
+        """Fetch PRs from a repo with pagination."""
         raw = self.client.get_pull_requests(username, self.repo_name)
 
         if not raw["success"]:
-            return {"error": raw["error"]}
+            return failure(raw["error"])
 
         all_prs = raw["data"].get("items", [])
         total = len(all_prs)
+
         paginated = all_prs[offset: offset + limit]
 
         prs = [
@@ -158,46 +158,53 @@ class GitHubService:
             for pr in paginated
         ]
 
-        return {
-            "prs": prs,
-            "meta": {
+        return success(
+            message=f"PRs retrieved for {username}.",
+            items=prs,
+            meta={
                 "total": total,
                 "limit": limit,
                 "offset": offset,
                 "returned": len(prs),
-            },
-        }
+            }
+        )
 
-    # ------------------------------------------------------
-    # 3️⃣ RECENT REPOS
-    # ------------------------------------------------------
+    # Repository endpoint with pagination
     def get_recent_repos(self, username: str, limit: int = 10, offset: int = 0):
+        """Fetch recent repos for a user with pagination."""
         raw = self.client.get_recent_repos(username)
 
         if not raw["success"]:
-            return {"error": raw["error"]}
+            return failure(raw["error"])
 
         all_repos = raw["data"]
         total = len(all_repos)
 
         paginated = all_repos[offset: offset + limit]
 
-        return {
-            "recent_repos": paginated,
-            "meta": {
+        return success(
+            message=f"Recent repositories retrieved for {username}.",
+            items=paginated,
+            meta={
                 "total": total,
                 "limit": limit,
                 "offset": offset,
                 "returned": len(paginated),
-            },
-        }
+            }
+        )
 
-    # ------------------------------------------------------
-    # 4️⃣ FUSION ENDPOINT USED BY /activity
-    # ------------------------------------------------------
+    # Fusion endpoint used by /activity
     def get_user_github_activity(self, username: str, limit: int = 10, offset: int = 0):
-        return {
-            "commits": self.get_user_commits(username, limit, offset),
-            "prs": self.get_user_prs(username, limit, offset),
-            "recent_repos": self.get_recent_repos(username, limit, offset),
-        }
+        """Fuse commits, PRs, and repos for a user."""
+        commits = self.get_user_commits(username, limit, offset)
+        prs = self.get_user_prs(username, limit, offset)
+        repos = self.get_recent_repos(username, limit, offset)
+
+        return success(
+            message=f"GitHub activity retrieved for {username}.",
+            items={
+                "commits": commits,
+                "prs": prs,
+                "recent_repos": repos,
+            }
+        )

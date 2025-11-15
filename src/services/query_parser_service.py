@@ -10,6 +10,7 @@ class QueryParserService:
     """
     @staticmethod
     def extract_user(question: str) -> Optional[str]:
+        """Extracts user name from natural question."""
         # Basic: split by space + look for known names
         words = re.findall(r"[A-Za-z]+", question.lower())
 

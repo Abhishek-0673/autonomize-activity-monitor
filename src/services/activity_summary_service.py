@@ -1,5 +1,5 @@
 class ActivitySummaryService:
-
+    """Activity summary generator."""
     @staticmethod
     def generate(user: str, jira_data: dict, github_data: dict) -> str:
         """
@@ -7,6 +7,7 @@ class ActivitySummaryService:
         """
 
         def pluralize(count, noun):
+            """Pluralize a noun based on count."""
             # handle nouns ending with 'y' -> 'ies' (repository -> repositories)
             if count == 0:
                 return f"No {noun}s" if not noun.endswith("y") else f"No {noun[:-1]}ies"

@@ -7,6 +7,7 @@ from src.core.logger import get_logger
 logger = get_logger(__name__)
 
 class GitHubClient:
+    """Handles communication with the GitHub API."""
     BASE_URL = os.environ.get("GITHUB_API_HOST_URL", "https://api.github.com")
 
     def __init__(self):
@@ -18,6 +19,7 @@ class GitHubClient:
         }
 
     def _get(self, url: str, params=None, headers=None):
+        """Generic GET request."""
         try:
             response = requests.get(
                 url,
@@ -38,6 +40,7 @@ class GitHubClient:
             return {"success": False, "error": str(e)}
 
     def get_recent_commits(self, username: str, repo_name: str, limit: int = 5, page: int = 1):
+        """Fetch recent commits from a repo with pagination."""
         """Fetch commits from a repo with pagination."""
         url = f"{self.BASE_URL}/repos/{username}/{repo_name}/commits"
 
