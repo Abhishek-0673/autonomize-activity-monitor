@@ -39,7 +39,7 @@ class GitHubClient:
         except Exception as e:
             return {"success": False, "error": str(e)}
 
-    def get_recent_commits(self, username: str, repo_name: str, limit: int = 5, page: int = 1):
+    def get_recent_commits(self, username: str, repo_name: str, limit: int = 100, page: int = 1):
         """Fetch recent commits from a repo with pagination."""
         """Fetch commits from a repo with pagination."""
         url = f"{self.BASE_URL}/repos/{username}/{repo_name}/commits"

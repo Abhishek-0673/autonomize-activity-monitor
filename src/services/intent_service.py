@@ -58,9 +58,7 @@ class IntentService:
 
         text_lower = text.lower()
 
-        # -----------------------------------------
         # STEP 1 — Strongest signal: explicit source
-        # -----------------------------------------
         explicit_jira = IntentService._contains_any(text_lower, IntentService.JIRA_KEYWORDS)
         explicit_github = IntentService._contains_any(text_lower, IntentService.GITHUB_KEYWORDS)
 
@@ -71,26 +69,20 @@ class IntentService:
             # but we know it's GitHub-only intent
             pass  # continue to normal keyword evaluation
 
-        # -----------------------------------------
         # STEP 2 — Full activity override,
         #          but ONLY if no explicit source was mentioned
-        # -----------------------------------------
         if not explicit_jira and not explicit_github:
             for phrase in IntentService.FULL_ACTIVITY_PHRASES:
                 if re.search(phrase, text_lower):
                     return "FULL_ACTIVITY"
 
-        # -----------------------------------------
         # STEP 3 — Keyword rule-based matching
-        # -----------------------------------------
         for intent, patterns in IntentService.INTENT_PATTERNS.items():
             for pattern in patterns:
                 if re.search(pattern, text_lower):
                     return intent
 
-        # -----------------------------------------
         # STEP 4 — AI fallback (ambiguous queries)
-        # -----------------------------------------
         try:
             ai = AIClient()
             ai_intent = ai.classify_intent(text)
@@ -99,7 +91,5 @@ class IntentService:
         except Exception:
             pass
 
-        # -----------------------------------------
         # STEP 5 — Safe default
-        # -----------------------------------------
         return "FULL_ACTIVITY"

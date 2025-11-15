@@ -194,9 +194,9 @@ class GitHubService:
         )
 
     # Fusion endpoint used by /activity
-    def get_user_github_activity(self, username: str, limit: int = 10, offset: int = 0):
+    def get_user_github_activity(self, username: str, limit: int = 10, offset: int = 0, period: str = None, since: str = None, until: str = None):
         """Fuse commits, PRs, and repos for a user."""
-        commits = self.get_user_commits(username, limit, offset)
+        commits = self.get_user_commits(username, limit, offset, period, since, until)
         prs = self.get_user_prs(username, limit, offset)
         repos = self.get_recent_repos(username, limit, offset)
 

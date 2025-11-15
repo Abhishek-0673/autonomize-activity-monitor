@@ -1,7 +1,7 @@
 import streamlit as st
 
 
-def user_message(text: str):
+def user_message(text, timestamp):
     st.markdown(
         f"""
         <div style="
@@ -13,15 +13,19 @@ def user_message(text: str):
             float:right;
             clear:both;
             font-size:14px;
+            position: relative;
         ">
-            {text}
+            <div>{text}</div>
+            <div style="font-size:11px; color:#555; text-align:right; margin-top:4px;">
+                {timestamp}
+            </div>
         </div>
         """,
-        unsafe_allow_html=True,
+        unsafe_allow_html=True
     )
 
 
-def bot_message(text: str):
+def bot_message(text, timestamp):
     st.markdown(
         f"""
         <div style="
@@ -34,10 +38,13 @@ def bot_message(text: str):
             clear:both;
             font-size:14px;
         ">
-            {text}
+            <div>{text}</div>
+            <div style="font-size:11px; color:#777; text-align:right; margin-top:4px;">
+                {timestamp}
+            </div>
         </div>
         """,
-        unsafe_allow_html=True,
+        unsafe_allow_html=True
     )
 
 def info_card(title: str, body: str):
