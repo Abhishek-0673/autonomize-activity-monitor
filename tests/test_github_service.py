@@ -18,16 +18,20 @@ def fake_commit(timestamp):
         }
     }
 
-
 def test_get_commits_basic(mocker, gh_service):
     now = datetime.utcnow().replace(tzinfo=timezone.utc)
     commits = [fake_commit(now.isoformat()) for _ in range(8)]
 
-    mocker.patch.object(
-        gh_service.client,
-        "get_recent_commits",
-        return_value={"success": True, "data": commits},
-    )
+    mocker.patch.object(gh_service.client, "get_recent_commits",
+                        return_value={"success": True, "data": commits})
+
+    res = gh_service.get_user_commits("user1", limit=5, offset=0)
+
+    assert res["success"] is True
+    assert "data" in res
+    assert isinstance(res["data"]["items"], list)
+    assert "meta" in res["data"]
+
 
     res = gh_service.get_user_commits("user1", limit=5, offset=0)
 

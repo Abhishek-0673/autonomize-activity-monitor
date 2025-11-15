@@ -20,4 +20,4 @@ class AIService:
         Write a short natural language summary.
         """
 
-        return self.ai.generate_answer(prompt)
+        return self.ai.generate_summary(prompt)

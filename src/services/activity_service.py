@@ -6,77 +6,98 @@ from src.services.query_parser_service import QueryParserService
 from src.services.intent_service import IntentService
 from src.core.user_resolver import UserResolver
 
+
 class ActivityService:
-    """Activity service for generating activity summaries."""
     def __init__(self):
         self.jira = JiraService()
         self.github = GitHubService()
         self.summarizer = ActivitySummaryService()
 
-    def get_activity(self, question: str, limit: int = 5, offset: int = 0):
-        """Generate activity summary for a user."""
+    # ------------------------
+    #   TOP-LEVEL INTENT TEXT
+    # ------------------------
+    def _intent_message(self, intent: str, user: str) -> str:
+        mapping = {
+            "JIRA_ISSUES": f"JIRA issues for {user}",
+            "GITHUB_COMMITS": f"Recent commits by {user}",
+            "GITHUB_PRS": f"Pull requests by {user}",
+            "GITHUB_REPOS": f"Repository activity for {user}",
+        }
+        return mapping.get(intent, f"Activity summary for {user}")
 
+    # --------------------------------------------
+    #   HELPERS: build response items per intent
+    # --------------------------------------------
+    def _build_jira_items(self, jira_data):
+        return {"jira": jira_data}
+
+    def _build_github_commits_items(self, github_data):
+        return {"commits": github_data["data"]["items"]["commits"]}
+
+    def _build_github_prs_items(self, github_data):
+        return {"prs": github_data["data"]["items"]["prs"]}
+
+    def _build_github_repos_items(self, github_data):
+        return {"repos": github_data["data"]["items"]["recent_repos"]}
+
+    def _build_full_activity_items(self, jira_data, github_data, summary_text):
+        return {
+            "jira": jira_data,
+            "github": github_data,
+            "summary": summary_text
+        }
+
+    # ------------------------------------------------------
+    #   MAIN ENTRYPOINT — clean, readable, no duplication
+    # ------------------------------------------------------
+    def get_activity(self, question: str, limit: int = 5, offset: int = 0):
+        # 1. Identify user
         user_name = QueryParserService.extract_user(question)
         if not user_name:
-            return failure("Could not identify the user from your question.")
+            return failure("Could not identify the user from our records!")
 
+        # 2. Resolve accounts
         ids = UserResolver.resolve(user_name)
         if not ids:
-            return failure(f"No accountId configured for '{user_name}'")
+            return success(
+                message=f"No accountId configured for '{user_name}'.",
+                items={},
+                meta={}
+            )
 
         jira_id = ids["jira"]
         github_username = ids["github"]
 
+        # 3. Determine intent
         intent = IntentService.detect_intent(question)
 
+        # 4. Fetch raw data once
         jira_data = self.jira.get_user_issues(jira_id, limit, offset)
         github_data = self.github.get_user_github_activity(github_username, limit, offset)
 
+        # 5. Generate summary (deterministic)
         summary_text = self.summarizer.generate(user_name, jira_data, github_data)
 
-        intent_map = {
-            "JIRA_ISSUES": lambda: success(
-                message=f"JIRA issues for {user_name}",
-                items={
-                    "jira": jira_data,
-                    "github": github_data,
-                    "summary": summary_text
-                }
-            ),
-            "GITHUB_COMMITS": lambda: success(
-                message=f"GitHub commits for {user_name}",
-                items={
-                    "commits": github_data.get("commits"),
-                    "github": github_data,
-                    "summary": summary_text
-                }
-            ),
-            "GITHUB_PRS": lambda: success(
-                message=f"GitHub PRs for {user_name}",
-                items={
-                    "prs": github_data.get("prs"),
-                    "github": github_data,
-                    "summary": summary_text
-                }
-            ),
-            "GITHUB_REPOS": lambda: success(
-                message=f"GitHub repositories for {user_name}",
-                items={
-                    "recent_repos": github_data.get("recent_repos"),
-                    "github": github_data,
-                    "summary": summary_text
-                }
-            )
+        # 6. Intent → Response builder mapping
+        intent_builders = {
+            "JIRA_ISSUES": lambda: self._build_jira_items(jira_data),
+            "GITHUB_COMMITS": lambda: self._build_github_commits_items(github_data),
+            "GITHUB_PRS": lambda: self._build_github_prs_items(github_data),
+            "GITHUB_REPOS": lambda: self._build_github_repos_items(github_data),
         }
 
-        if intent in intent_map:
-            return intent_map[intent]()
+        # 7. Pick builder
+        items = intent_builders.get(
+            intent,
+            lambda: self._build_full_activity_items(jira_data, github_data, summary_text)
+        )()
 
+        # 8. Top-level message
+        top_message = self._intent_message(intent, user_name)
+
+        # 9. Final unified response
         return success(
-            message=f"Complete activity report for {user_name}",
-            items={
-                "jira": jira_data,
-                "github": github_data,
-                "summary": summary_text
-            }
+            message=top_message,
+            items=items,
+            meta={"limit": limit, "offset": offset}
         )
