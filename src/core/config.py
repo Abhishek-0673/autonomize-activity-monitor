@@ -13,6 +13,8 @@ class Settings(BaseSettings):
     jira_abhialien_account_id: str = ""
     jira_test_account_id: str = ""
     github_token: str = ""
+    github_repo_name: str = ""
+    github_api_host_url: str = ""
     openai_api_key: str = ""
     use_mock_data: bool = False
     env: str = "development"

@@ -1,3 +1,5 @@
+import os
+
 import requests
 from src.core.config import settings
 from src.core.logger import get_logger
@@ -5,7 +7,7 @@ from src.core.logger import get_logger
 logger = get_logger(__name__)
 
 class GitHubClient:
-    BASE_URL = "https://api.github.com"
+    BASE_URL = os.environ.get("GITHUB_API_HOST_URL", "https://api.github.com")
 
     def __init__(self):
         self.token = settings.github_token
