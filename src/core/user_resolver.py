@@ -7,21 +7,25 @@ class UserResolver:
     """
     Resolves natural language names into JIRA account IDs.
     """
-    NAME_MAP = {
-        "abhishek": settings.jira_abhishek_account_id,
-        "abhialien": settings.jira_abhialien_account_id,
-        "test": settings.jira_test_account_id,
+    MAP = {
+        "abhishek": {
+            "jira": settings.jira_abhishek_account_id,
+            "github": settings.github_username_for_abhishek
+        },
+        "abhialien": {
+            "jira": settings.jira_abhialien_account_id,
+            "github": settings.github_username_for_abhialien
+        }
     }
 
-    @classmethod
-    def resolve(cls, name: str) -> Optional[str]:
-        name = name.lower().strip()
-        return cls.NAME_MAP.get(name)
+    @staticmethod
+    def resolve(name: str):
+        key = name.lower()
+        return UserResolver.MAP.get(key)
 
-    @classmethod
-    def resolve_reverse(cls, account_id: str) -> Optional[str]:
-        # Reverse lookup: accountId → name
-        for name, acc_id in cls.NAME_MAP.items():
-            if acc_id == account_id:
-                return name.capitalize()
+    @staticmethod
+    def resolve_reverse(jira_id: str):
+        for name, ids in UserResolver.MAP.items():
+            if ids["jira"] == jira_id:
+                return name
         return None
